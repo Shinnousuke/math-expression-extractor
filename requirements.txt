@@ -1,0 +1,9 @@
+streamlit
+opencv-python
+pytesseract
+sympy
+pyttsx3
+numpy
+pillow
+speechrecognition
+streamlit-drawable-canvas
