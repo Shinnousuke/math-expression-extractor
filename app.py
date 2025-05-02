@@ -1,17 +1,24 @@
-# the one 
-# app.py
 import streamlit as st
-import cv2
 import pytesseract
 import numpy as np
 from PIL import Image, ImageOps
 import re
+import speech_recognition as sr
+import pyttsx3
 import sympy as sp
 
+# Initialize speech engine
+engine = pyttsx3.init()
+
+def speak(text):
+    engine.say(text)
+    engine.runAndWait()
+
 def preprocess_image(image):
-    img = np.array(image.convert('L'))
-    img = cv2.resize(img, (800, 600))
-    _, binary = cv2.threshold(img, 128, 255, cv2.THRESH_BINARY_INV)
+    image = image.convert('L')  # Convert to grayscale
+    image = image.resize((800, 600))
+    img_array = np.array(image)
+    binary = np.where(img_array < 128, 255, 0).astype(np.uint8)  # Inverted binary
     return binary
 
 def extract_expression(image):
@@ -41,14 +48,50 @@ def calculate_expression(expression):
     except Exception as e:
         return f"Error evaluating expression: {str(e)}"
 
+def voice_command_handler():
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone()
+
+    with microphone as source:
+        speak("Voice Assistant Activated. Say a math expression.")
+        st.info("Listening for a math expression...")
+        recognizer.adjust_for_ambient_noise(source)
+
+        try:
+            audio = recognizer.listen(source, timeout=10)
+            command = recognizer.recognize_google(audio).lower()
+            expression = clean_expression(command)
+
+            if expression:
+                result = calculate_expression(expression)
+                st.session_state['result'] = result
+                speak(result)
+            else:
+                st.warning("No valid math expression detected.")
+                speak("No valid math expression detected.")
+
+        except sr.UnknownValueError:
+            st.error("Could not understand the command.")
+            speak("Could not understand the command.")
+        except sr.RequestError:
+            st.error("Error with the speech recognition service.")
+            speak("Error with the speech recognition service.")
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+            speak(f"An error occurred: {str(e)}")
+
+# --- Streamlit UI ---
+
 st.set_page_config(page_title="Math Expression Extractor", page_icon="➗", layout="centered")
 st.title("➗ Math Expression Extractor & Evaluator")
 
 st.sidebar.title("Options")
-option = st.sidebar.radio("Choose Input Method:", ("Upload or Capture Image", "Draw Canvas"))
+option = st.sidebar.radio("Choose Input Method:", ("Upload or Capture Image", "Draw Canvas", "Voice Command"))
 
+# --- Upload or Capture Image ---
 if option == "Upload or Capture Image":
     st.subheader("Upload an Image or Capture One")
+
     uploaded_file = st.file_uploader("Choose an Image...", type=['png', 'jpg', 'jpeg', 'bmp'])
     captured_image = st.camera_input("Or take a Picture:")
 
@@ -61,9 +104,13 @@ if option == "Upload or Capture Image":
         result = calculate_expression(expression)
 
         st.success(result)
+        if st.button("🔊 Speak Result"):
+            speak(result)
 
+# --- Canvas Drawing ---
 elif option == "Draw Canvas":
     from streamlit_drawable_canvas import st_canvas
+
     st.subheader("Draw a Math Expression")
     canvas_result = st_canvas(
         fill_color="black",
@@ -79,16 +126,33 @@ elif option == "Draw Canvas":
     if st.button("Extract Expression from Drawing"):
         if canvas_result.image_data is not None:
             img_data = canvas_result.image_data
-            img = Image.fromarray((img_data[:, :, 0]).astype('uint8'))
+            img = Image.fromarray((img_data[:, :, 0]).astype('uint8'))  # Use one channel
             img = ImageOps.invert(img).resize((800, 600))
-            binary_img = np.array(img)
-            _, binary_img = cv2.threshold(binary_img, 128, 255, cv2.THRESH_BINARY)
+            binary_img = np.where(np.array(img) < 128, 255, 0).astype(np.uint8)
 
             expression = extract_expression(binary_img)
             result = calculate_expression(expression)
 
             st.success(result)
+            if st.button("🔊 Speak Result", key="speak_canvas"):
+                speak(result)
         else:
             st.warning("Please draw something first.")
 
-st.markdown("---\nMade with ❤️ by [YourName]")
+# --- Voice Command ---
+elif option == "Voice Command":
+    st.subheader("Voice Command Input")
+
+    if st.button("🎙️ Start Voice Assistant"):
+        voice_command_handler()
+
+    if 'result' in st.session_state:
+        st.success(st.session_state['result'])
+
+# --- Footer ---
+st.markdown(
+    """
+    ---
+    Made with ❤️ by [YourName].
+    """
+)
