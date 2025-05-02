@@ -3,14 +3,14 @@ import pytesseract
 import numpy as np
 from PIL import Image, ImageOps
 import re
+import speech_recognition as sr
 import sympy as sp
 
-# --- Utility Functions ---
-
 def preprocess_image(image):
-    img = image.convert('L')  # Convert to grayscale
-    img = img.resize((800, 600))
-    binary = img.point(lambda p: 255 if p > 128 else 0)
+    image = image.convert('L')  # Grayscale
+    image = image.resize((800, 600))
+    img_array = np.array(image)
+    binary = np.where(img_array < 128, 255, 0).astype(np.uint8)
     return binary
 
 def extract_expression(image):
@@ -40,23 +40,50 @@ def calculate_expression(expression):
     except Exception as e:
         return f"Error evaluating expression: {str(e)}"
 
+def voice_command_handler():
+    recognizer = sr.Recognizer()
+    microphone = sr.Microphone()
+
+    with microphone as source:
+        st.info("Voice Assistant Activated. Say a math expression.")
+        recognizer.adjust_for_ambient_noise(source)
+
+        try:
+            audio = recognizer.listen(source, timeout=10)
+            command = recognizer.recognize_google(audio).lower()
+            expression = clean_expression(command)
+
+            if expression:
+                result = calculate_expression(expression)
+                st.session_state['result'] = result
+            else:
+                st.warning("No valid math expression detected.")
+
+        except sr.UnknownValueError:
+            st.error("Could not understand the command.")
+        except sr.RequestError:
+            st.error("Error with the speech recognition service.")
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+
 # --- Streamlit UI ---
 
 st.set_page_config(page_title="Math Expression Extractor", page_icon="➗", layout="centered")
 st.title("➗ Math Expression Extractor & Evaluator")
 
 st.sidebar.title("Options")
-option = st.sidebar.radio("Choose Input Method:", ("Upload Image", "Draw Canvas"))
+option = st.sidebar.radio("Choose Input Method:", ("Upload or Capture Image", "Draw Canvas", "Voice Command"))
 
-# --- Upload Image ---
-if option == "Upload Image":
-    st.subheader("Upload an Image")
+# --- Upload or Capture Image ---
+if option == "Upload or Capture Image":
+    st.subheader("Upload an Image or Capture One")
 
     uploaded_file = st.file_uploader("Choose an Image...", type=['png', 'jpg', 'jpeg', 'bmp'])
+    captured_image = st.camera_input("Or take a Picture:")
 
-    if uploaded_file:
-        img = Image.open(uploaded_file)
-        st.image(img, caption="Uploaded Image", width=400)
+    if uploaded_file or captured_image:
+        img = Image.open(captured_image if captured_image else uploaded_file)
+        st.image(img, caption="Selected Image", width=400)
 
         binary_img = preprocess_image(img)
         expression = extract_expression(binary_img)
@@ -83,9 +110,9 @@ elif option == "Draw Canvas":
     if st.button("Extract Expression from Drawing"):
         if canvas_result.image_data is not None:
             img_data = canvas_result.image_data
-            img = Image.fromarray((img_data[:, :, 0]).astype('uint8'))
+            img = Image.fromarray((img_data[:, :, 0]).astype('uint8'))  # Use one channel
             img = ImageOps.invert(img).resize((800, 600))
-            binary_img = img.point(lambda p: 255 if p > 128 else 0)
+            binary_img = np.where(np.array(img) < 128, 255, 0).astype(np.uint8)
 
             expression = extract_expression(binary_img)
             result = calculate_expression(expression)
@@ -94,10 +121,20 @@ elif option == "Draw Canvas":
         else:
             st.warning("Please draw something first.")
 
+# --- Voice Command ---
+elif option == "Voice Command":
+    st.subheader("Voice Command Input")
+
+    if st.button("🎙️ Start Voice Assistant"):
+        voice_command_handler()
+
+    if 'result' in st.session_state:
+        st.success(st.session_state['result'])
+
 # --- Footer ---
 st.markdown(
     """
     ---
-    Made with ❤️ by [YourName]
+    Made with ❤️ by [YourName].
     """
 )
