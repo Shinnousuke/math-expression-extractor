@@ -4,21 +4,13 @@ import numpy as np
 from PIL import Image, ImageOps
 import re
 import speech_recognition as sr
-import pyttsx3
 import sympy as sp
 
-# Initialize speech engine
-engine = pyttsx3.init()
-
-def speak(text):
-    engine.say(text)
-    engine.runAndWait()
-
 def preprocess_image(image):
-    image = image.convert('L')  # Convert to grayscale
+    image = image.convert('L')  # Grayscale
     image = image.resize((800, 600))
     img_array = np.array(image)
-    binary = np.where(img_array < 128, 255, 0).astype(np.uint8)  # Inverted binary
+    binary = np.where(img_array < 128, 255, 0).astype(np.uint8)
     return binary
 
 def extract_expression(image):
@@ -53,8 +45,7 @@ def voice_command_handler():
     microphone = sr.Microphone()
 
     with microphone as source:
-        speak("Voice Assistant Activated. Say a math expression.")
-        st.info("Listening for a math expression...")
+        st.info("Voice Assistant Activated. Say a math expression.")
         recognizer.adjust_for_ambient_noise(source)
 
         try:
@@ -65,20 +56,15 @@ def voice_command_handler():
             if expression:
                 result = calculate_expression(expression)
                 st.session_state['result'] = result
-                speak(result)
             else:
                 st.warning("No valid math expression detected.")
-                speak("No valid math expression detected.")
 
         except sr.UnknownValueError:
             st.error("Could not understand the command.")
-            speak("Could not understand the command.")
         except sr.RequestError:
             st.error("Error with the speech recognition service.")
-            speak("Error with the speech recognition service.")
         except Exception as e:
             st.error(f"An error occurred: {str(e)}")
-            speak(f"An error occurred: {str(e)}")
 
 # --- Streamlit UI ---
 
@@ -104,8 +90,6 @@ if option == "Upload or Capture Image":
         result = calculate_expression(expression)
 
         st.success(result)
-        if st.button("🔊 Speak Result"):
-            speak(result)
 
 # --- Canvas Drawing ---
 elif option == "Draw Canvas":
@@ -134,8 +118,6 @@ elif option == "Draw Canvas":
             result = calculate_expression(expression)
 
             st.success(result)
-            if st.button("🔊 Speak Result", key="speak_canvas"):
-                speak(result)
         else:
             st.warning("Please draw something first.")
 
@@ -153,6 +135,6 @@ elif option == "Voice Command":
 st.markdown(
     """
     ---
-    Made with ❤️ by [YourName].
+    Made with ❤️ by [Chinnu].
     """
 )
